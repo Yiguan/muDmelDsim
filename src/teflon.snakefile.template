@@ -1,0 +1,151 @@
+
+SPECIES='dsim'
+FAM='31'
+IREF=f"/data/home/ywang120/myData/bbsrc/idata/TE/teDB/MCTE_{SPECIES}/{SPECIES}.prep_MP/{SPECIES}.mappingRef.fa"
+ITF = f"/data/home/ywang120/myData/bbsrc/idata/TE/teDB/MCTE_{SPECIES}/{SPECIES}.prep_TF/"
+
+
+IPWD=f"/data/home/ywang120/myData/bbsrc/idata/TE/{SPECIES}/fam{FAM}"
+READ_PATH=f"/data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq/{SPECIES}/fam{FAM}/"
+ISAM="/localdisk/science/samtools-1.11/bin/samtools"
+IBWA="/localdisk/science/bwa-0.7.17/bwa"
+
+
+import os
+import re
+
+def ind_id(sample_id):
+    return sample_id.split('_')[3]
+
+SAMPLE = [x.replace("_R1.fastq.gz","") for x in os.listdir(READ_PATH) if x.endswith('R1.fastq.gz') and x.startswith('sid_')]
+
+rule final:
+    input:
+        "step4.log4"
+        #"samples_bam.txt"
+        #expand("sample_{sid2}.log1", sid2=sampleid)
+
+rule toSAM:
+    input:
+        fa = IREF,
+        ii = lambda w:"{t1}{t2}_R1.fastq.gz".format(t1=READ_PATH, t2=w.sid),
+        jj = lambda w:"{t1}{t2}_R2.fastq.gz".format(t1=READ_PATH, t2=w.sid)
+    output:
+        oo = temp("{sid}.bam")
+    params:
+        rg = lambda  w: r"@RG\tID:{tt}\tSM:{tt}".format(tt=ind_id(w.sid))
+    threads: 8
+    shell:
+        "{IBWA} mem  -R '{params.rg}' -t {threads} -Y {input.fa} {input.ii} {input.jj}  "
+        "| {ISAM} view -Sb -@ {threads} - > {output.oo}"
+
+rule samtools_sort:
+    input:
+        ii = "{sid}.bam"
+    output:
+        oo = "{sid}.sorted.bam"
+    threads: 8
+    shell:
+        "{ISAM} sort -t {threads} {input.ii} > {output.oo}"
+
+rule samtools_index:
+    input:
+        ii = "{sid}.sorted.bam"
+    output:
+        oo = "{sid}.sorted.bam.bai"
+    shell:
+        "{ISAM} index {input.ii}"
+
+rule markRemoveDuplicate:
+    input:
+        ii = "{sid}.sorted.bam",
+        hh = "{sid}.sorted.bam.bai"
+    output:
+        oo = "{sid}.sort.noDup.bam",
+        qq = "{sid}.sort.noDup.metrics.txt"
+    params:
+        pp = "REMOVE_DUPLICATES=true ASSUME_SORTED=true VALIDATION_STRINGENCY=LENIENT MAX_FILE_HANDLES_FOR_READ_ENDS_MAP=1000"
+    shell:
+        "picard MarkDuplicates INPUT={input.ii} OUTPUT={output.oo} METRICS_FILE={output.qq} "
+        "{params.pp}"
+
+rule mergeSample:
+    input:
+        ii = expand("{sid}.sort.noDup.bam",sid=SAMPLE)
+    output:
+        oo = "samples_bam.txt",
+        #tt = "sample_{sid}.tmp", sid=sampleid)
+    shell:
+        """find . -name "sid*sort.noDup.bam" | xargs -I {{}} readlink -f {{}} | awk 'BEGIN{{FS="/";OFS="\t"}}{{print $0,substr($11,13,2)}}' > {output.oo}"""
+
+rule teflon_step1:
+    input:
+        ii = "samples_bam.txt"
+    output:
+        oo = "{sid2}.log1"
+    params:
+        pp = lambda w:r"-q 20 -sd 20 -i {tt}".format(tt=ind_id(w.sid2))
+    threads: 8
+    shell:
+        "python2 /data/home/ywang120/TEFLoN/teflon.v0.4.py "
+        "-wd {IPWD} "
+        "-d {ITF} "
+        "-s {IPWD}/{input.ii} "
+        "-eb {IBWA} "
+        "-es {ISAM} "
+        "-l1 family "
+        "-l2 class "
+        "{params.pp} "
+        "-t {threads} > {output.oo}"
+
+rule teflon_step2:
+    input:
+        ii = expand("{sid2}.log1",sid2=SAMPLE),
+        jj = "samples_bam.txt"
+    output:
+        oo = "step2.log2"
+    params:
+        pp = "-n1 1 -n2 1 -q 20"
+    threads: 8
+    shell:
+        "python2 /data/home/ywang120/TEFLoN/teflon_collapse.py "
+        "-wd {IPWD} "
+        "-d {ITF} "
+        "-s {input.jj} "
+        "-es {ISAM} "
+        "{params.pp} "
+        "-t {threads} > {output.oo}"
+
+rule teflon_step3:
+    input:
+        ii = "step2.log2",
+        jj = "samples_bam.txt"
+    output:
+        oo = "{sid3}.log3"
+    params:
+        pp = lambda w:r"-q 20 -i {tt}".format(tt=ind_id(w.sid3))
+    threads: 8
+    shell:
+        "python2 /data/home/ywang120/TEFLoN/teflon_count.py "
+        "-wd {IPWD} "
+        "-d {ITF} "
+        "-s {input.jj} "
+        "-eb {IBWA} "
+        "-es {ISAM} "
+        "-l2 class "
+        "{params.pp} "
+        "-t {threads} > {output.oo} "
+
+
+rule teflon_step4:
+    input: 
+        ii = expand("{sid3}.log3",sid3=SAMPLE),
+        jj = "samples_bam.txt"
+    output:
+        oo = "step4.log4"
+    shell:
+        "python2 /data/home/ywang120/TEFLoN/teflon_genotype.py "
+        "-wd {IPWD} "
+        "-d {ITF} "
+        "-s {input.jj} "
+        "-dt pooled > {output.oo}"

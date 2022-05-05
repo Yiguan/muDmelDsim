@@ -1,0 +1,79 @@
+import os
+
+
+# READ_PATH = "/data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq/dmeN/fam25/"
+# PREFIX = "dmeN_25"
+READ_PATH = "/data/home/ywang120/myData/bbsrc/idata/denovo_mutations/dsim/fam31/denovo_sim_indel/"
+
+
+
+#REF = '/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta'
+REF = '/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna'
+CHROM = ['2L', '2R', '3L', '3R', 'X', '4']
+
+########################################################
+
+def ind_id(sample_id):
+    return sample_id.split('_')[3]
+
+SAMPLE = [x.replace("_R1.fastq.gz","") for x in os.listdir(READ_PATH) if x.endswith('R1.fastq.gz')]
+#######################
+
+rule final:
+    input:
+        expand("{sample}.sort.noDup.bam.bai", sample=SAMPLE)
+
+rule bwa_map:
+    input:
+        fa = REF,
+        r1 = lambda w:"{t1}{t2}_R1.fastq.gz".format(t1=READ_PATH, t2=w.sample),
+        r2 = lambda w:"{t1}{t2}_R2.fastq.gz".format(t1=READ_PATH, t2=w.sample)
+    output:    
+        ss = temp("{sample}.bam")
+    params:
+        rg = lambda  w: r"@RG\tID:{tt}\tSM:{tt}".format(tt=ind_id(w.sample))
+    threads: 8
+    shell:
+        "bwa mem -R '{params.rg}' -t {threads} {input.fa} {input.r1} {input.r2} | samtools view -Sb -@ {threads} - > {output.ss}"
+
+rule samtools_sort:
+    input:
+        ii = "{sample}.bam"
+    output:
+        # DO NOT delete the file, picard MarkDuplicates remove duplicate not in pairs which may leave a single read end
+        # which may not perform simulation that convert bam  to fastq
+        oo = "{sample}.sort.bam" 
+    threads: 8
+    shell:
+        "samtools sort -t {threads} {input.ii} > {output.oo}"
+
+rule samtools_index:
+    input:
+        ii = "{sample}.sort.bam" 
+    output:
+        oo = "{sample}.sort.bam.bai"
+    shell:
+        "samtools index {input.ii}"
+
+####
+rule markRemoveDuplicate:
+    input:
+        ii = "{sample}.sort.bam",
+        hh = "{sample}.sort.bam.bai"
+    output:
+        oo = "{sample}.sort.noDup.bam",
+        qq = temp("{sample}.sort.noDup.metrics.txt")
+    params:
+        pp = "REMOVE_DUPLICATES=true ASSUME_SORTED=true VALIDATION_STRINGENCY=LENIENT"
+    shell:
+        "picard MarkDuplicates INPUT={input.ii} OUTPUT={output.oo} METRICS_FILE={output.qq} "
+        "{params.pp}"
+            
+           
+rule indexNodupBam:
+    input:
+        ii = "{sample}.sort.noDup.bam"
+    output:
+        oo = "{sample}.sort.noDup.bam.bai"
+    shell:
+        "samtools index {input.ii}"

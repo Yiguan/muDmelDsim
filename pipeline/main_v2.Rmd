@@ -1,0 +1,1300 @@
+Change Log:
+
+Using bcftools to call variants instead of GATK
+
+
+
+# Download Reference Genome
+
+## Drosophila melanogaster
+
+```shell
+cd /data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster
+wget http://ftp.flybase.net/releases/current/dmel_r6.42/fasta/dmel-all-chromosome-r6.42.fasta.gz .
+gunzip dmel-all-chromosome-r6.42.fasta.gz
+wget http://ftp.flybase.net/releases/current/dmel_r6.42/gff/dmel-all-r6.42.gff.gz .
+
+samtools faidx dmel-all-chromosome-r6.42.fasta
+bwa index dmel-all-chromosome-r6.42.fasta
+conda activate gatkspark
+picard  CreateSequenceDictionary R=dmel-all-chromosome-r6.42.fasta
+```
+
+
+
+## Drosophila simulans
+
+```shell
+cd /data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_simulans/representative/GCF_016746395.2_Prin_Dsim_3.1/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna.gz
+
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_simulans/representative/GCF_016746395.2_Prin_Dsim_3.1/GCF_016746395.2_Prin_Dsim_3.1_genomic.gff.gz
+
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_simulans/representative/GCF_016746395.2_Prin_Dsim_3.1/md5checksums.txt
+
+gunzip GCF_016746395.2_Prin_Dsim_3.1_genomic.fna.gz
+
+## rename major scaffolds: 
+# Sequence-Name	Sequence-Role	Assigned-Molecule	Assigned-Molecule-Location/Type	GenBank-Accn	Relationship	RefSeq-Accn	Assembly-Unit	Sequence-Length	UCSC-style-name
+2L	assembled-molecule	2L	Chromosome	CM028640.2	=	NC_052520.2	Primary Assembly	23857595	na
+2R	assembled-molecule	2R	Chromosome	CM028641.2	=	NC_052521.2	Primary Assembly	22319025	na
+3L	assembled-molecule	3L	Chromosome	CM028642.2	=	NC_052522.2	Primary Assembly	23399903	na
+3R	assembled-molecule	3R	Chromosome	CM028643.2	=	NC_052523.2	Primary Assembly	28149585	na
+4	assembled-molecule	4	Chromosome	CM028644.2	=	NC_052524.2	Primary Assembly	1146867	na
+X	assembled-molecule	X	Chromosome	CM028645.2	=	NC_052525.2	Primary Assembly	22032822	na
+
+
+##Note gff doesn't rename scaffold. Do that in future if in need
+
+samtools faidx GCF_016746395.2_Prin_Dsim_3.1_genomic.fna
+bwa index GCF_016746395.2_Prin_Dsim_3.1_genomic.fna
+conda activate gatkspark
+picard  CreateSequenceDictionary R=GCF_016746395.2_Prin_Dsim_3.1_genomic.fna
+
+```
+
+## Drosophila subobscura
+
+```shell
+cd /data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsubobscura
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_subobscura/representative/GCF_008121235.1_UCBerk_Dsub_1.0/GCF_008121235.1_UCBerk_Dsub_1.0_genomic.fna.gz
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_subobscura/representative/GCF_008121235.1_UCBerk_Dsub_1.0/GCF_008121235.1_UCBerk_Dsub_1.0_genomic.gff.gz
+
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_subobscura/representative/GCF_008121235.1_UCBerk_Dsub_1.0/GCF_008121235.1_UCBerk_Dsub_1.0_assembly_report.txt
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_subobscura/representative/GCF_008121235.1_UCBerk_Dsub_1.0/md5checksums.txt
+
+gunzip GCF_008121235.1_UCBerk_Dsub_1.0_genomic.fna.gz
+```
+
+## Drosophila suzukuu
+
+```shell
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_suzukii/representative/GCF_013340165.1_LBDM_Dsuz_2.1.pri/GCF_013340165.1_LBDM_Dsuz_2.1.pri_genomic.fna.gz
+
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_suzukii/representative/GCF_013340165.1_LBDM_Dsuz_2.1.pri/GCF_013340165.1_LBDM_Dsuz_2.1.pri_genomic.gff.gz
+
+wget https://ftp.ncbi.nih.gov/genomes/refseq/invertebrate/Drosophila_suzukii/representative/GCF_013340165.1_LBDM_Dsuz_2.1.pri/md5checksums.txt
+
+gunzip GCF_013340165.1_LBDM_Dsuz_2.1.pri_genomic.fna.gz
+
+```
+
+
+# Download Raw Data
+
+```shell
+cd /data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq
+wget -r --cut-dirs=2 -np -nH -nc -R "index.html*" https://cgr.liv.ac.uk/illum/LIMS25820_2a427a1ead6a5699/Trimmed/
+cd Trimmed
+
+######### for Dmel
+find . -type d -regex './Sample_[0-9].*-Dmel[0-9]*_.*' | xargs -I {} mv {} ../dmel
+cd ../dmel
+for ff in 27 28 29 30 32 34;do
+    mkdir fam${ff}
+    find . -type f -regex ".*Dmel${ff}_.*" | xargs -I {} mv {} fam${ff}
+done
+
+rm -r Sample_*
+# rename read files
+for r1 in $(find . -type f -regex ".*R1.fastq.gz");do
+    echo ${r1}
+    fam_id=${r1:5:2}
+    ind_id=${r1: -26:2}
+    new_id=sid_dmel_${fam_id}_${ind_id}
+    r1_new=./fam${fam_id}/${new_id}_R1.fastq.gz
+    r2_new=./fam${fam_id}/${new_id}_R2.fastq.gz
+    mv ${r1} ${r1_new}
+    r2=${r1//R1/R2}
+    mv ${r2} ${r2_new}
+done
+
+# check number of reads
+for r1 in $(find . -type f -regex ".*R1.fastq.gz");do
+    echo ${r1}
+    r2=${r1//R1/R2}
+    r1n=$(zcat ${r1} | wc -l | awk '{a=$1/4}END{print a}')
+    r2n=$(zcat ${r2} | wc -l | awk '{a=$1/4}END{print a}')
+    echo ${r1} ${r1n} ${r2n} >> reads_reads.txt
+done
+
+######### for Dimm
+find . -type d -regex './Sample_[0-9].*-Dimm_[0-9]*_.*' | xargs -I {} cp -r {} ../dimm
+cd ../dimm
+for ff in 33 35 37 38 40;do
+    mkdir fam${ff}
+    find . -type f -regex ".*Dimm_${ff}_.*" | xargs -I {} mv {} fam${ff}
+done
+rm -r Sample_*
+
+# rename read files
+for r1 in $(find . -type f -regex ".*R1.fastq.gz");do
+    #echo ${r1}
+    fam_id=${r1:5:2}
+    ind_id=${r1: -26:2}
+    new_id=sid_dimm_${fam_id}_${ind_id}
+    #echo ${new_id}
+    r1_new=./fam${fam_id}/${new_id}_R1.fastq.gz
+    r2_new=./fam${fam_id}/${new_id}_R2.fastq.gz
+    mv ${r1} ${r1_new}
+    r2=${r1//R1/R2}
+    mv ${r2} ${r2_new}
+done
+
+# check number of reads
+for r1 in $(find . -type f -regex ".*R1.fastq.gz");do
+    echo ${r1}
+    r2=${r1//R1/R2}
+    r1n=$(zcat ${r1} | wc -l | awk '{a=$1/4}END{print a}')
+    r2n=$(zcat ${r2} | wc -l | awk '{a=$1/4}END{print a}')
+    echo ${r1} ${r1n} ${r2n} >> reads_reads.txt
+done
+
+
+######### for Dsim
+find . -type d -regex './Sample_[0-9].*-Dsim_[0-9]*_.*' | xargs -I {} mv  {} ../dsim
+cd ../dsim
+for ff in 25 26 27 28 29 31;do
+    mkdir fam${ff}
+    find . -type f -regex ".*Dsim_${ff}_.*" | xargs -I {} mv {} fam${ff}
+done
+rm -r Sample_*
+
+# rename read files
+for r1 in $(find . -type f -regex ".*R1.fastq.gz");do
+    #echo ${r1}
+    fam_id=${r1:5:2}
+    ind_id=${r1: -26:2}
+    new_id=sid_dsim_${fam_id}_${ind_id}
+    #echo ${new_id}
+    r1_new=./fam${fam_id}/${new_id}_R1.fastq.gz
+    r2_new=./fam${fam_id}/${new_id}_R2.fastq.gz
+    mv ${r1} ${r1_new}
+    r2=${r1//R1/R2}
+    mv ${r2} ${r2_new}
+done
+
+# check number of reads
+for r1 in $(find . -type f -regex ".*R1.fastq.gz");do
+    echo ${r1}
+    r2=${r1//R1/R2}
+    r1n=$(zcat ${r1} | wc -l | awk '{a=$1/4}END{print a}')
+    r2n=$(zcat ${r2} | wc -l | awk '{a=$1/4}END{print a}')
+    echo ${r1} ${r1n} ${r2n} >> reads_reads.txt
+done
+
+#UPDATE: merge two batch data
+cd /data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq/dsim
+
+mkdir  fam{25,26,27,28,29,31}
+# read1
+for ff in $(find ../Dsim_batch1 -name *R1.fastq.gz);do
+    ff2=${ff/batch1/batch2}
+    echo ${ff2}
+    fam=fam${ff: -17:2}
+    outname=$(basename ${ff})
+    #echo ${fam}
+    cat ${ff} ${ff2} > ${fam}/${outname}
+done
+# read2
+for ff in $(find ../Dsim_batch1 -name *R2.fastq.gz);do
+    ff2=${ff/batch1/batch2}
+    echo ${ff2}
+    fam=fam${ff: -17:2}
+    outname=$(basename ${ff})
+    #echo ${fam}
+    echo "cat ${ff} ${ff2} > ${fam}/${outname}"
+    cat ${ff} ${ff2} > ${fam}/${outname}
+done
+
+
+#### for dsuz
+
+find . -type d -regex './Sample_[0-9].*-Dsuz_[0-9]*_.*' | xargs -I {} mv  {} ../dsuz
+cd ../dsuz
+for ff in 01 27 30 31 33;do
+    mkdir fam${ff}
+    find . -type f -regex ".*Dsuz_${ff}_.*" | xargs -I {} mv {} fam${ff}
+done
+rm -r Sample_*
+
+# rename read files
+for r1 in $(find . -type f -regex ".*R1.fastq.gz");do
+    #echo ${r1}
+    fam_id=${r1:5:2}
+    ind_id=${r1: -26:2}
+    new_id=sid_dsuz_${fam_id}_${ind_id}
+    #echo ${new_id}
+    r1_new=./fam${fam_id}/${new_id}_R1.fastq.gz
+    r2_new=./fam${fam_id}/${new_id}_R2.fastq.gz
+    mv ${r1} ${r1_new}
+    r2=${r1//R1/R2}
+    mv ${r2} ${r2_new}
+done
+
+# check number of reads
+for r1 in $(find . -type f -regex ".*R1.fastq.gz");do
+    echo ${r1}
+    r2=${r1//R1/R2}
+    r1n=$(zcat ${r1} | wc -l | awk '{a=$1/4}END{print a}')
+    r2n=$(zcat ${r2} | wc -l | awk '{a=$1/4}END{print a}')
+    echo ${r1} ${r1n} ${r2n} >> reads_reads.txt
+done
+
+
+#### for dmeN
+
+find . -type d -regex './Sample_[0-9].*-DmelN_[0-9]*_.*' | xargs -I {} mv  {} ../dmeN
+cd ../dmeN
+for ff in 01 05 15 18 23 25;do
+    mkdir fam${ff}
+    find . -type f -regex ".*DmelN_${ff}_.*" | xargs -I {} mv {} fam${ff}
+done
+rm -r Sample_*
+
+# rename read files
+for r1 in $(find ./fam* -type f -regex ".*R1.fastq.gz");do
+    #echo ${r1}
+    fam_id=${r1:5:2}
+    ind_id=${r1: -26:2}
+    new_id=sid_dmeN_${fam_id}_${ind_id}
+    #echo ${new_id}
+    r1_new=./fam${fam_id}/${new_id}_R1.fastq.gz
+    r2_new=./fam${fam_id}/${new_id}_R2.fastq.gz
+    mv ${r1} ${r1_new}
+    r2=${r1//R1/R2}
+    mv ${r2} ${r2_new}
+done
+
+# check number of reads
+for r1 in $(find ./fam* -type f -regex ".*R1.fastq.gz");do
+    echo ${r1}
+    r2=${r1//R1/R2}
+    r1n=$(zcat ${r1} | wc -l | awk '{a=$1/4}END{print a}')
+    r2n=$(zcat ${r2} | wc -l | awk '{a=$1/4}END{print a}')
+    echo ${r1} ${r1n} ${r2n} >> reads_reads.txt
+done
+```
+
+
+# Qaulity Control
+
+```shell
+SPECIES="dsim"
+cd /data/home/ywang120/myData/bbsrc/idata/qc/${SPECIES}
+IN_PATH="/data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq/${SPECIES}"
+
+find ${IN_PATH} -regex ".*R[1,2].fastq.gz" | parallel -j 12 fastqc {} --outdir=/data/home/ywang120/myData/bbsrc/idata/qc/${SPECIES}/
+multiqc .
+```
+
+
+
+# Call Variants
+
+
+Prepare `ploidy.config` in parental folder for common families
+
+```
+X       1       23542271        M       1
+X       1       23542271        F       2
+Y       1       3667352 M       1
+Y       1       3667352 F       0
+*       *       *       M       2
+*       *       *       F       2
+
+```
+
+Prepare `chromosome.config` in parental folder for common families
+
+```
+AUTO,2L
+AUTO,2R
+AUTO,3L
+AUTO,3R
+AUTO,4
+X,X
+Y,Y
+```
+
+
+
+
+Using `snakemake` pipeline for each family. 
+
+
+Prepare `samples.config`:
+
+```
+M0       M
+F0       F
+M1       M
+M2       M
+M3       M
+M4       M
+M5       M
+
+```
+
+
+Using the following code as a template. Copy it to the directory where variants will be called.
+
+```shell
+conda activate gatkspark
+# vim callvariants.snakefile.template
+snakemake -np --cores 16
+```
+
+
+# BamQC
+
+```shell
+mkdir bamqc
+runbamqc () {
+    echo ${1}
+    mkdir bamqc/bamqc_${1//.bam/}
+    /data/home/ywang120/qualimap_v2.2.1/qualimap --java-mem-size=32G bamqc \
+        -bam ${1} \
+        -outdir bamqc/bamqc_${1//.bam/}
+}
+
+export -f runbamqc
+ls sid_*.sort.noDup.bam | parallel -j 4 runbamqc
+
+cd bamqc 
+multiqc .
+```
+
+Here, based on coverage to determine sexual chromosome, and 
+create a file: `chromosome.config` describe the sexual chromosome, comma-separated
+
+```{text}
+AUTO,2L
+AUTO,2R
+AUTO,3L
+AUTO,3R
+AUTO,4
+X,X
+Y,Y
+```
+
+
+
+# Denovo Mutations
+
+## SNPs
+
+### Denovo identification
+
+```shell
+# conda activate gatkspark
+SPECIES='dsim'
+FAM='25'
+PED="/data/home/ywang120/myData/bbsrc/idata/ped/${SPECIES}_${FAM}.ped"
+CHR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/chromosome.config"
+#REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta"
+REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna"
+cd /data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}/fam${FAM}
+##########################
+
+
+IN1=/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/fam${FAM}/${SPECIES}_${FAM}_allsample.vcf.gz
+OUT1=${SPECIES}_${FAM}_allsample.snp.vcf.gz
+gatk SelectVariants \
+    -R ${REF} \
+    -V ${IN1} \
+    -select-type-to-include SNP \
+    -O ${OUT1}
+
+IN2=${OUT1}
+OUT2=${SPECIES}_${FAM}_allsample.snp.table.gz
+gatk VariantsToTable -V ${IN2} \
+    -F CHROM -F POS -F REF -F ALT -GF GT -GF DP -GF GQ -GF AD -GF ADF -GF ADR \
+    -O ${OUT2//.gz/}
+gzip ${OUT2//.gz/}
+
+
+########
+# For cross family variants check.
+# should wait here until above done for all the families from the same species
+
+
+
+# filter denovos
+IN3=${OUT2}
+OUT3=${SPECIES}_${FAM}_snp_denovo.txt
+/data/home/ywang120/myData/bbsrc/src/snp_denovo_filter_bcftools_v2.R \
+    --infile=${IN3} \
+    --chrfile=${CHR} \
+    --outfile=${OUT3} \
+    --pedfile=${PED} \
+    --famdir=/data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}
+
+```
+
+
+
+### Denovo simulation
+
+```shell
+export SPECIES="dsim"
+export FAM="28"
+PED="/data/home/ywang120/myData/bbsrc/idata/ped/${SPECIES}_${FAM}.ped"
+#REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta"
+REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna"
+CHR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/chromosome.config"
+
+cd /data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}/fam${FAM}/denovo_sim_snp
+
+# summarise the distribution of alterative allele in heterozygous offspring
+IN1="../${SPECIES}_${FAM}_allsample.snp.table.gz"
+OUT1="${SPECIES}_${FAM}_alt_distri_snp.txt"
+/data/home/ywang120/myData/bbsrc/src/alt_distri_in_het.R \
+    --infile ${IN1} \
+    --pedfile ${PED} \
+    --chrfile ${CHR} \
+    --maxdepth 150 \
+    --outfile ${OUT1}
+
+# randomly select sites to created mutations
+IN2=${REF}.fai
+OUT2="${SPECIES}_${FAM}_random_site_mutations_snp.txt"
+/data/home/ywang120/myData/bbsrc/src/gen_rand_sites.R \
+    --ref_fai ${IN2} \
+    --pedfile ${PED} \
+    --chrfile ${CHR} \
+    --outfile ${OUT2} \
+    --sample_size 100000 \
+    --pos_dist 500
+
+
+# extract reads from bam files
+IN3=${OUT2}
+IN3_1="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/fam${FAM}"
+OUT3=
+/data/home/ywang120/myData/bbsrc/src/extract_reads.py \
+    -infile ${IN3} \
+    -bamPath ${IN3_1}
+
+
+# create mutations on extracted reads
+IN4="../${SPECIES}_${FAM}_allsample.snp.vcf.gz"
+IN4_1=${OUT1}
+OUT4="${SPECIES}_${FAM}_modifySAM_snp.results"
+/data/home/ywang120/myData/bbsrc/src/create_mutation.py \
+    -ref ${REF} \
+    -pedfile ${PED} \
+    -chrfile ${CHR} \
+    -vcfgz ${IN4} \
+    -altdistri ${IN4_1} \
+    -logfile ${OUT4}
+
+# merge mutated reads by sample
+for ss in $(find . -maxdepth 1 -type f -name 'M*_mutated.sam' | cut -d '_' -f 1 | sort | uniq);do
+    sid=${ss##*/}
+    echo ${sid}
+    cat ${sid}*mutated.sam > merged_${sid}_mutated.sam
+    rm ${sid}*mutated.sam
+    echo '~~~~~~~'
+done
+
+
+#########################################################################
+#                 split bam files by read names
+##
+#conda activate gatkspark
+
+export BAM_DIR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/fam${FAM}"
+
+splitReads() {
+    #echo ${ff}
+    sid=${1:7:2}
+    echo $sid
+    bam=$(find ${BAM_DIR} -maxdepth 1 -type f -regex ".*_${sid}.sort.bam")
+    echo ${bam}
+    cut -f 1 ${1} > ${sid}_target_reads.txt
+    
+    picard FilterSamReads \
+        I=${bam} \
+        O=${sid}.major.bam \
+        READ_LIST_FILE=${sid}_target_reads.txt \
+        FILTER=excludeReadList
+    
+    picard FilterSamReads \
+        I=${bam} \
+        O=${sid}.minor.bam \
+        READ_LIST_FILE=${sid}_target_reads.txt \
+        FILTER=includeReadList
+        
+    samtools view ${sid}.minor.bam > ${sid}.minor.sam
+}
+export -f splitReads
+ls merged_*_mutated.sam | parallel -j 5 splitReads
+#########################################################################
+# replace read sequence with mutated ones
+# no command args needed
+/data/home/ywang120/myData/bbsrc/src/substitute_reads.R 
+#########################################################################
+#                        Bam to fastq
+# using samtools, convert bam to paired-end reads in fastq format
+# for minor bams
+minorFQ() {
+    samtools view -H ${1} > ${1//.bam/.mutated_header.sam}
+    cat ${1//.bam/.mutated.sam} >> ${1//.bam/.mutated_header.sam}
+    #cat ${ff//.bam/.sam} >> ${ff//.bam/.mutated_header.sam}
+    samtools collate -u -O ${1//.bam/.mutated_header.sam} | \
+        samtools fastq -@ 12 \
+        -1 ${1//.bam/.R1.fastq.gz} \
+        -2 ${1//.bam/.R2.fastq.gz} \
+        -0 /dev/null
+}
+export -f minorFQ
+ls | grep "M[0-9]*.minor.bam" | parallel -j 3 minorFQ
+
+# for major bams
+majorFQ() {
+    samtools collate -u -O ${1} | \
+        samtools fastq -@ 12 \
+        -1 ${1//.bam/.R1.fastq.gz} \
+        -2 ${1//.bam/.R2.fastq.gz} \
+        -0 /dev/null
+}
+export -f majorFQ
+ls | grep "M[0-9]*.major.bam" | parallel -j 3 majorFQ
+
+# merge minor and major bams
+major_minor_merge() {
+    sid=${1:0:2}
+    cat ${1} ${sid}.minor.R1.fastq.gz > sim_${SPECIES}_${FAM}_${sid}_R1.fastq.gz
+    cat ${sid}.major.R2.fastq.gz ${sid}.minor.R2.fastq.gz > sim_${SPECIES}_${FAM}_${sid}_R2.fastq.gz
+}
+export -f major_minor_merge
+ls M[0-9]*.major.R1.fastq.gz | parallel -j 6 major_minor_merge
+
+# remove intermediate sam files
+find . -maxdepth 1 -type f -regex './M[0-9]*_[a-zA-Z0-9]*_[0-9]*.sam' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.major.bam' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.minor.bam' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.minor.sam' | xargs rm
+find . -maxdepth 1 -type f -regex './merged_M[0-9]*_mutated.sam' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.minor.mutated.sam' | xargs rm
+
+find . -maxdepth 1 -type f -regex './M[0-9]*.major.R[12].fastq.gz' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.minor.R[12].fastq.gz' | xargs rm
+#########################################################################
+#               link original parental bam files 
+ln -s /data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq/${SPECIES}/fam${FAM}/sid_${SPECIES}_${FAM}_M0_R* .
+ln -s /data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq/${SPECIES}/fam${FAM}/sid_${SPECIES}_${FAM}_F0_R* .
+
+mv sid_${SPECIES}_${FAM}_M0_R1.fastq.gz sim_${SPECIES}_${FAM}_M0_R1.fastq.gz
+mv sid_${SPECIES}_${FAM}_M0_R2.fastq.gz sim_${SPECIES}_${FAM}_M0_R2.fastq.gz
+mv sid_${SPECIES}_${FAM}_F0_R1.fastq.gz sim_${SPECIES}_${FAM}_F0_R1.fastq.gz
+mv sid_${SPECIES}_${FAM}_F0_R2.fastq.gz sim_${SPECIES}_${FAM}_F0_R2.fastq.gz
+
+################### SIMULATION DONE ####################################
+```
+
+#### Run on simulated data
+
+Create Snakefile in the directory using template `simu_snp.Snakefile.template`
+
+```shell
+SPECIES="dsim"
+FAM="28"
+
+cd /data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}/fam${FAM}/denovo_sim_snp
+cp ../../../../call_variants/${SPECIES}/ploidy.config ..
+cp ../../../../call_variants/${SPECIES}/fam${FAM}/samples.config .
+# vim callvariants.snakemake.template
+snakemake -p --cores 64
+```
+
+```shell
+SPECIES="dsim"
+FAM="31"
+cd /data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}/fam${FAM}/denovo_sim_snp
+
+PED="/data/home/ywang120/myData/bbsrc/idata/ped/${SPECIES}_${FAM}.ped"
+#REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta"
+REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna"
+CHR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/chromosome.config"
+
+IN1="simu_xx_allsample.vcf.gz"
+OUT1="simu_xx_allsample.snp.vcf.gz"
+gatk SelectVariants \
+    -R ${REF} \
+    -V ${IN1} \
+    -select-type-to-include SNP \
+    -O ${OUT1}
+
+IN2=${OUT1}
+OUT2="simu_xx_allsample.snp.table"
+gatk VariantsToTable -V ${IN2} \
+    -F CHROM -F POS -F REF -F ALT -GF GT -GF DP -GF GQ -GF AD -GF ADF -GF ADR \
+    -O ${OUT2}
+
+gzip ${OUT2}
+
+
+# filter on simulated call
+IN3=${OUT2}.gz
+OUT3=sim_snp_denovo.txt
+/data/home/ywang120/myData/bbsrc/src/snp_denovo_filter_bcftools_v2.R \
+    --infile=${IN3} \
+    --outfile=${OUT3} \
+    --chrfile=${CHR} \
+    --pedfile=${PED} \
+    --famdir=/data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}
+
+IN4_1=${REF}.fai
+IN4_2="${SPECIES}_${FAM}_random_site_mutations_snp.txt"
+IN4_3=sim_snp_denovo.txt #${OUT3}
+OUT4_1=${SPECIES}_${FAM}_callable.txt
+/data/home/ywang120/myData/bbsrc/src/callable_by_simulation_v3.R \
+     --pedfile=${PED} \
+     --chrfile=${CHR} \
+    --ref_fai=${IN4_1} \
+    --mutation_table=${IN4_2} \
+    --recover_file=${IN4_3} \
+    --callable_outfile=${OUT4_1} 
+
+
+
+# IN4_1=${OUT2}.gz
+# IN4_2=${REF}.fai
+# IN4_3="${SPECIES}_${FAM}_random_site_mutations_snp.txt"
+# IN4_4="${SPECIES}_${FAM}_modifySAM_snp.results"
+# IN4_5=${OUT3}
+# OUT4_1=all_sim.summary
+# OUT4_2=${SPECIES}_${FAM}_callable.txt
+# /data/home/ywang120/myData/bbsrc/src/callable_by_simulation_bcftools_v2.R \
+#     --infile=${IN4_1} \
+#     --pedfile=${PED} \
+#     --chrfile=${CHR} \
+#     --ref_fai=${IN4_2} \
+#     --mutation_table=${IN4_3} \
+#     --mutation_results=${IN4_4} \
+#     --recover_file=${IN4_5} \
+#     --simSummary_outfile=${OUT4_1} \
+#     --callable_outfile=${OUT4_2} \
+#     --famdir="/data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}"
+
+# awk 'BEGIN{OFMT="%f"}NR>1{a=a+$8}END{print a}' ${SPECIES}_${FAM}_callable.txt
+```
+
+
+
+
+## INDELs
+### denovo indel identification
+
+Recall indels using `platypus` (or `Pindel` alternatively)
+
+```shell
+SPECIES="dmel"
+FAM="28"
+REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta" ## names
+#REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna"
+cd /data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/fam${FAM}
+##########################
+
+conda activate py2
+IN1=$(find . -maxdepth 1 -name "*sort.noDup.bam" | tr '\n' ',' | sed 's/,$//g')
+OUT1=${SPECIES}_${FAM}_platypus_indels.vcf
+platypus callVariants --bamFiles=${IN1} \
+    --refFile=${REF} --output=${OUT1} \
+    --genSNPs=0 \
+    --countOnlyExactIndelMatches=1 \
+    --nCPU=16 
+
+#######
+cd /data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}/fam${FAM}
+conda deactivate
+#conda activate gatkspark
+
+# Biallelic and indel only
+IN2=/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/fam${FAM}/${OUT1}
+OUT2=${SPECIES}_${FAM}_platypus_indels_biallelic.vcf
+vcftools --vcf ${IN2} --min-alleles 2 --max-alleles 2 \
+    --keep-only-indels --recode --recode-INFO-all --out ${OUT2//.vcf/}
+
+
+# extract annotation
+IN3=${OUT2//.vcf/.recode.vcf}
+OUT3="${SPECIES}_${FAM}_platypus_indels_biallelic.table.gz"
+gatk VariantsToTable -V  ${IN3} \
+    -F CHROM -F POS  -F REF -F ALT -GF GQ -GF NR -GF NV \
+    --show-filtered true \
+    -O ${OUT3//.gz/}
+gzip ${OUT3//.gz/}
+
+# filter
+
+PED="/data/home/ywang120/myData/bbsrc/idata/ped/${SPECIES}_${FAM}.ped"
+CHR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/chromosome.config"
+
+IN4="${SPECIES}_${FAM}_platypus_indels_biallelic.table.gz"
+OUT4="${SPECIES}_${FAM}_platypus_indels_biallelic_denovo.txt"
+/data/home/ywang120/myData/bbsrc/src/indel_denovo_filter.R \
+    --infile=${IN4} \
+    --outfile=${OUT4} \
+    --chrfile=${CHR} \
+    --pedfile=${PED}
+```
+
+### donovo indel simulation
+
+```shell
+export SPECIES="dsim"
+export FAM="31"
+PED="/data/home/ywang120/myData/bbsrc/idata/ped/${SPECIES}_${FAM}.ped"
+#REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta"
+REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna"
+CHR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/chromosome.config"
+
+# mkdir denovo_sim_indel
+cd /data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}/fam${FAM}/denovo_sim_indel
+
+
+# select high confidence heterozygous sites in offspring
+IN1="../${SPECIES}_${FAM}_platypus_indels_biallelic.table.gz"
+OUT1="${SPECIES}_${FAM}_alt_distri_indel.txt"
+/data/home/ywang120/myData/bbsrc/src/high_confidence_het_indel_platypus.R \
+    --infile ${IN1} \
+    --chrfile ${CHR} \
+    --pedfile ${PED} \
+    --outfile ${OUT1}
+
+IN2=${REF}.fai
+OUT2="${SPECIES}_${FAM}_random_site_mutations_indel.txt"
+/data/home/ywang120/myData/bbsrc/src/gen_rand_sites_indel.R \
+    --ref_fai ${IN2} \
+    --pedfile ${PED} \
+    --chrfile ${CHR} \
+    --outfile ${OUT2} \
+    --sample_size 100000 \
+    --pos_dist 500
+
+IN3=${OUT2}
+IN3_1="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/fam${FAM}"
+OUT3=
+/data/home/ywang120/myData/bbsrc/src/extract_reads_indel.py \
+    -infile ${IN3} \
+    -bamPath ${IN3_1}
+
+IN4="../${SPECIES}_${FAM}_allsample.snp.vcf.gz"
+IN4_1=${OUT1}
+IN4_2=${OUT2}
+OUT4="${SPECIES}_${FAM}_modifySAM_indel.results"
+/data/home/ywang120/myData/bbsrc/src/create_indel_v2.py \
+    -ref ${REF} \
+    -pedfile ${PED} \
+    -chrfile ${CHR} \
+    -vcfgz ${IN4} \
+    -altdistri ${IN4_1} \
+    -simufile ${IN4_2} \
+    -logfile ${OUT4}
+
+# merge mutated reads by sample
+for ss in $(find . -maxdepth 1 -type f -name 'M*_*mutated.sam' | cut -d '_' -f 1 | sort | uniq);do
+    sid=${ss##*/}
+    echo ${sid}
+    cat ${sid}*mutated.sam > merged_${sid}_mutated.sam
+    rm ${sid}*mutated.sam
+    echo '~~~~~~~'
+done
+
+
+#########################################################################
+#                 split bam files by read names
+##
+#conda activate gatkspark
+export BAM_DIR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/fam${FAM}"
+
+splitReads() {
+    #echo ${ff}
+    sid=${1:7:2}
+    bam=$(find ${BAM_DIR} -maxdepth 1 -type f -regex ".*_${sid}.sort.bam")
+    echo ${bam}
+    cut -f 1  ${1} > ${sid}_target_reads.txt
+    
+    picard FilterSamReads \
+        I=${bam} \
+        O=${sid}.major.bam \
+        READ_LIST_FILE=${sid}_target_reads.txt \
+        FILTER=excludeReadList
+    
+    picard FilterSamReads \
+        I=${bam} \
+        O=${sid}.minor.bam \
+        READ_LIST_FILE=${sid}_target_reads.txt \
+        FILTER=includeReadList
+        
+    samtools view ${sid}.minor.bam > ${sid}.minor.sam
+}
+export -f splitReads
+ls merged_*_mutated.sam | parallel -j 6 splitReads
+
+#########################################################################
+# replace read sequence with mutated ones
+# no command args needed
+/data/home/ywang120/myData/bbsrc/src/substitute_reads.R 
+
+#########################################################################
+#                        Bam to fastq
+# using samtools, convert bam to paired-end reads in fastq format
+# for minor bams
+minorFQ() {
+    samtools view -H ${1} > ${1//.bam/.mutated_header.sam}
+    cat ${1//.bam/.mutated.sam} >> ${1//.bam/.mutated_header.sam}
+    #cat ${ff//.bam/.sam} >> ${ff//.bam/.mutated_header.sam}
+    samtools collate -u -O ${1//.bam/.mutated_header.sam} | \
+        samtools fastq -@ 12 \
+        -1 ${1//.bam/.R1.fastq.gz} \
+        -2 ${1//.bam/.R2.fastq.gz} \
+        -0 /dev/null
+}
+export -f minorFQ
+ls | grep "M[0-9]*.minor.bam" | parallel -j 3 minorFQ
+
+# for major bams
+majorFQ() {
+    samtools collate -u -O ${1} | \
+        samtools fastq -@ 12 \
+        -1 ${1//.bam/.R1.fastq.gz} \
+        -2 ${1//.bam/.R2.fastq.gz} \
+        -0 /dev/null
+}
+export -f majorFQ
+ls | grep "M[0-9]*.major.bam" | parallel -j 2 majorFQ
+
+# merge minor and major bams
+major_minor_merge() {
+    sid=${1:0:2}
+    cat ${1} ${sid}.minor.R1.fastq.gz > sim_${SPECIES}_${FAM}_${sid}_R1.fastq.gz
+    cat ${sid}.major.R2.fastq.gz ${sid}.minor.R2.fastq.gz > sim_${SPECIES}_${FAM}_${sid}_R2.fastq.gz
+}
+export -f major_minor_merge
+ls M[0-9]*.major.R1.fastq.gz | parallel -j 3 major_minor_merge
+
+# remove intermediate sam files
+find . -maxdepth 1 -type f -regex './M[0-9]*_[a-zA-Z0-9]*_[0-9]*.sam' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.major.bam' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.minor.bam' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.minor.sam' | xargs rm
+find . -maxdepth 1 -type f -regex './merged_M[0-9]*_mutated.sam' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.minor.mutated.sam' | xargs rm
+
+find . -maxdepth 1 -type f -regex './M[0-9]*.major.R[12].fastq.gz' | xargs rm
+find . -maxdepth 1 -type f -regex './M[0-9]*.minor.R[12].fastq.gz' | xargs rm
+
+#########################################################################
+#               link original parental bam files 
+ln -s /data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq/${SPECIES}/fam${FAM}/sid_${SPECIES}_${FAM}_M0_R* .
+ln -s /data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq/${SPECIES}/fam${FAM}/sid_${SPECIES}_${FAM}_F0_R* .
+
+mv sid_${SPECIES}_${FAM}_M0_R1.fastq.gz sim_${SPECIES}_${FAM}_M0_R1.fastq.gz
+mv sid_${SPECIES}_${FAM}_M0_R2.fastq.gz sim_${SPECIES}_${FAM}_M0_R2.fastq.gz
+mv sid_${SPECIES}_${FAM}_F0_R1.fastq.gz sim_${SPECIES}_${FAM}_F0_R1.fastq.gz
+mv sid_${SPECIES}_${FAM}_F0_R2.fastq.gz sim_${SPECIES}_${FAM}_F0_R2.fastq.gz
+################### SIMULATION DONE ####################################
+```
+
+#### Run on simulated data
+
+Create Snakefile in the directory using template `simu_indel.Snakefile.template`
+
+```shell
+SPECIES="dmeN"
+FAM="23"
+
+cd /data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}/fam${FAM}/denovo_sim_indel
+# vim simu_indel.Snakefile.template
+snakemake -p --cores 64
+```
+
+Filter
+
+```shell
+SPECIES="dmel"
+FAM="27"
+REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta"
+#REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna"
+PED="/data/home/ywang120/myData/bbsrc/idata/ped/${SPECIES}_${FAM}.ped"
+CHR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/chromosome.config"
+cd /data/home/ywang120/myData/bbsrc/idata/denovo_mutations/${SPECIES}/fam${FAM}/denovo_sim_indel
+##########################
+
+conda activate py2
+IN1=$(find . -maxdepth 1 -name "*sort.noDup.bam" | tr '\n' ',' | sed 's/,$//g')
+OUT1="sim_${SPECIES}_${FAM}_platypus_indels.vcf"
+platypus callVariants --bamFiles=${IN1} \
+    --refFile=${REF} --output=${OUT1} \
+    --genSNPs=0 \
+    --countOnlyExactIndelMatches=1 \
+    --nCPU=16 
+
+
+
+conda deactivate
+#conda activate gatkspark
+
+# Biallelic and indel only
+IN2=${OUT1}
+OUT2="sim_${SPECIES}_${FAM}_platypus_indels_biallelic.vcf"
+vcftools --vcf ${IN2} --min-alleles 2 --max-alleles 2 \
+    --keep-only-indels --recode --recode-INFO-all --out ${OUT2//.vcf/}
+
+# extract annotation
+IN3="${OUT2//.vcf/.recode.vcf}"
+OUT3="sim_${SPECIES}_${FAM}_platypus_indels_biallelic.table.gz"
+gatk VariantsToTable -V  ${IN3} \
+    -F CHROM -F POS -F REF -F ALT -GF GQ -GF NR -GF NV \
+    --show-filtered true \
+    -O ${OUT3//.gz/}
+gzip ${OUT3//.gz/}
+
+# filter
+
+IN4="sim_${SPECIES}_${FAM}_platypus_indels_biallelic.table.gz"
+OUT4="sim_${SPECIES}_${FAM}_platypus_indels_biallelic_denovo.txt"
+/data/home/ywang120/myData/bbsrc/src/indel_denovo_filter.R \
+    --infile=${IN4} \
+    --outfile=${OUT4} \
+    --chrfile=${CHR} \
+    --pedfile=${PED}
+
+
+IN5_1="${SPECIES}_${FAM}_random_site_mutations_indel.txt"
+IN5_2="sim_${SPECIES}_${FAM}_platypus_indels_biallelic_denovo.txt"
+OUT5=${SPECIES}_${FAM}_callable.txt
+/data/home/ywang120/myData/bbsrc/src/callable_by_simulation_v3_indel.R \
+    --pedfile=${PED} \
+    --chrfile=${CHR} \
+    --ref_fai=${REF}.fai \
+    --mutation_table=${IN5_1} \
+    --recover_file=${IN5_2} \
+    --callable_outfile=${OUT5}
+
+# IN5_1=${OUT3}
+# IN5_2=${REF}.fai
+# IN5_3="${SPECIES}_${FAM}_random_site_mutations_indel.txt"
+# IN5_4="${SPECIES}_${FAM}_modifySAM_indel.results"
+# IN5_5=${OUT4}
+# OUT5_1=all_sim.summary
+# OUT5_2=${SPECIES}_${FAM}_callable.txt
+# /data/home/ywang120/myData/bbsrc/src/callable_by_simulation_indel_platypus.R \
+#     --infile=${IN5_1} \
+#     --pedfile=${PED} \
+#     --chrfile=${CHR} \
+#     --ref_fai=${IN5_2} \
+#     --mutation_table=${IN5_3} \
+#     --mutation_results=${IN5_4} \
+#     --recover_file=${IN5_5} \
+#     --simSummary_outfile=${OUT5_1} \
+#     --callable_outfile=${OUT5_2}
+```
+
+
+
+
+# Recombination
+
+<!-- 
+
+Variants called by GATK have less background noise in phasing, cmopared with bcftools.
+
+## Recall with GATK
+
+```shell
+export SPECIES="dmel"
+export FAM="28"
+export REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta"
+export PED="/data/home/ywang120/myData/bbsrc/idata/ped/${SPECIES}_${FAM}.ped"
+export CHR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/chromosome.config"
+
+cd /data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/fam${FAM}/gatkcall
+
+########################
+# craete GVCF
+
+genVCF() {
+    echo ${1}
+    tt=$(basename ${1})
+    sid=${tt%%.*}
+    echo ${sid}
+    gatk --java-options '-Xmx18G' HaplotypeCaller -R ${REF} -I ${1} \
+        -ERC GVCF \
+        -O ${sid}.sort.noDup.g.vcf.gz
+}
+
+export -f genVCF
+
+find ../ -name '*sort.noDup.bam' | parallel -j 7 genVCF
+
+###################
+# recall for haploid
+
+males=( M0 M1 M2 M4 M5 )
+
+recall_male(){
+    ###
+    # extract sexual read
+    bamfile=../sid_${SPECIES}_${FAM}_${1}.sort.bam
+    sexualsam=itemp_${SPECIES}_${FAM}_${1}.haploid.sam
+    [ -f ${sexualsam} ] && rm ${sexualsam}
+    samtools view -H ${bamfile} > ${sexualsam}
+    # while IFS= read -r chr;do
+    #     samtools view ${bamfile} ${chr} | awk '$7=="="' >> ${sexualsam}
+    # done < "haploid_chr.config"
+    while IFS=',' read -r t1 t2 ;do
+        if [[ ${t1} == 'X' || ${t1} == 'Y' ]]; then
+            samtools view ${bamfile} ${t2} | awk '$7=="="' >> ${sexualsam}
+        fi
+    done < ${CHR}
+    sexualbam=${sexualsam/.sam/.bam}
+    samtools view -bS ${sexualsam} > ${sexualbam}
+    ###
+    # bam to fastq
+    r1=${sexualsam/.sam/_read1.fq.gz}
+    r2=${sexualsam/.sam/_read2.fq.gz}
+    samtools collate -u -O  ${sexualbam} | \
+        samtools fastq -@ 8 \
+        -1 ${r1} \
+        -2 ${r2} \
+        -0 /dev/null
+    ###
+    # bwa map
+    realignbam=${sexualsam/.sam/.realign.bam}
+    bwa mem -R "@RG\tID:${1}\tSM:${1}" -t 8 ${REF} \
+        ${r1} \
+        ${r2} | \
+        samtools view -Sb -@ 8 - > ${realignbam}
+    # sort bam
+    realign_sort=${sexualsam/.sam/.realign.sort.bam}
+    samtools sort -t 8 ${realignbam} > ${realign_sort}
+    samtools index ${realign_sort}
+    # picard duplicate
+    realign_sort_nodup=${sexualsam/.sam/.realign.sort.noDup.bam}
+    picard MarkDuplicates INPUT=${realign_sort} \
+        OUTPUT=${realign_sort_nodup} \
+        METRICS_FILE=${realign_sort_nodup/.bam/.metrics.txt} \
+        REMOVE_DUPLICATES=true ASSUME_SORTED=true VALIDATION_STRINGENCY=LENIENT
+
+    picard BuildBamIndex INPUT=${realign_sort_nodup} VALIDATION_STRINGENCY=LENIENT
+    # call gvcf
+    realign_gvcf=${sexualsam/.sam/.sort.noDup.g.vcf.gz}
+    gatk --java-options '-Xmx32G' HaplotypeCaller \
+        -R ${REF} -I ${realign_sort_nodup} \
+        -ploidy 1 \
+        -ERC GVCF -O ${realign_gvcf}
+    ######
+    # remove hap chr in origin gvcf
+    chr_str=
+    while IFS=',' read -r t1 t2 ;do
+        if [[ ${t1} == 'X' || ${t1} == 'Y' ]]; then
+            chr_str=${chr_str},${t2}
+        fi
+    done < ${CHR}
+    chr_str=${chr_str:1}
+    origin_gvcf=sid_${SPECIES}_${FAM}_${1}.sort.noDup.g.vcf.gz
+    new_gvcf=itemp_${SPECIES}_${FAM}_${1}.new.sort.noDup.g.vcf
+    bcftools view -t "^${chr_str}" ${origin_gvcf}  > ${new_gvcf}
+    # get new gvcf
+    while IFS=',' read -r t1 t2 ;do
+        if [[ ${t1} == 'X' || ${t1} == 'Y' ]]; then
+            zcat ${realign_gvcf} | awk -v x=${t2} '{if($1==x){print $0}}'  >> ${new_gvcf}
+        fi
+    done < ${CHR}
+    # sort new gvcf by chr according that in ref
+    new_gvcf_sort=${new_gvcf/.g.vcf/.sort.g.vcf}
+    picard SortVcf I=${new_gvcf} O=${new_gvcf_sort}
+    mv ${origin_gvcf} ${origin_gvcf/.vcf.gz/.male_diploidMode.vcf.gz}
+    mv ${new_gvcf_sort} ${origin_gvcf//.gz/}
+    # bgzip and index
+    bgzip ${origin_gvcf//.gz/}
+    tabix -p vcf ${origin_gvcf}
+    rm itemp_${SPECIES}_${FAM}_${1}*
+}
+
+export -f recall_male
+
+echo ${males[@]} | tr ' ' '\n' | parallel -j 2 recall_male
+```
+ -->
+
+
+
+
+
+
+
+```bash
+export SPECIES="dmel"
+export FAM="30"
+export REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta"
+#export REF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna"
+export PED="/data/home/ywang120/myData/bbsrc/idata/ped/${SPECIES}_${FAM}.ped"
+export CHR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/chromosome.config"
+
+
+
+cd /data/home/ywang120/myData/bbsrc/idata/recomb/${SPECIES}/fam${FAM}
+##########################
+
+# Using biallelic snp markers and GQ>20
+#conda activate gatkspark
+IN1="../../../call_variants/${SPECIES}/fam${FAM}/${SPECIES}_${FAM}_allsample.vcf.gz"
+OUT1="${SPECIES}_${FAM}_allsample.snp.biallelic.GQ20.vcf.gz"
+vcftools --gzvcf ${IN1} --min-alleles 2 --max-alleles 2  --remove-indels \
+    --remove-filtered-all  --minGQ 20 --recode --stdout | bgzip -c > ${OUT1}
+
+# Phasing vcf file
+IN2=${OUT1}
+OUT2=${OUT1//vcf.gz/phased_auto.gz}
+/data/home/ywang120/myData/bbsrc/src/allel_phasing.py \
+    -invcf ${IN2} \
+    -chrfile ${CHR} \
+    -pedfile ${PED} \
+    -outfile ${OUT2}
+
+# visualise haps and get breakpoints
+IN3=${OUT2}
+/data/home/ywang120/myData/bbsrc/src/hap_plot.R \
+    --infile ${IN3} \
+    --chrfile ${CHR} \
+    --pedfile ${PED}
+
+
+
+## run analysis.md
+
+# based on haplotype plot, determine major phasing error and fix
+# filename: tofix.txt
+# SPECIES   FAM CHROM PARENT  fix_s    fix_e
+# dsim    fam27   2R  F0    12623200    22319025   
+# dsim    fam28   X   F0    13827026    22032822
+# dsim    fam29   2R  F0    2842634     22319025
+# dmeN    fam05   X   F0    23284127    23542271
+# dmel    fam30   X   F0    22459181    23542271
+
+
+
+
+
+# construct parental haps
+IN4=${OUT2}
+OUT4=${SPECIES}_${FAM}_parentalHaps.fa
+/data/home/ywang120/myData/bbsrc/src/gen_parental_haps.R \
+    --infile ${IN4} \
+    --pedfile ${PED} \
+    --reffa ${REF} \
+    --chrfile ${CHR} \
+    --outfile ${OUT4}
+
+gzip ${OUT4}
+```
+
+
+# TE
+
+
+Use `TEFLoN`
+
+## Build TE database
+
+Use `RMBlast` when install RepeatMasker, succeed!
+
+Teflon: Reference genome(fasta) should only contains sequence name. Other info not allowed.
+
+```shell
+cd /data/home/ywang120/myData/bbsrc/idata/TE/teDB/MCTE_dmel
+SPECIES='dmel'
+IREF="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dmelanogaster/dmel-all-chromosome-r6.42.fasta"
+IPREFIX=${SPECIES}
+cp ${IREF} .
+newref=$(basename ${IREF} | sed "s/.fasta$/_simpleSeqName.fasta/g")
+sed "s/\(>\S*\).*/\1/g" ${IREF} > ${newref}
+```
+
+```shell
+SPECIES='dmel'
+IPWD="/data/home/ywang120/myData/bbsrc/idata/TE/teDB/te_dmel"
+#IREF="GCF_016746395.2_Prin_Dsim_3.1_genomic.fna"
+IREF='dmel-all-chromosome-r6.42_simpleSeqName.fasta'
+IREP_BASE="/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_te2/MCTE_File_S1_final.fasta"
+IPREFIX=${SPECIES}
+
+ISAM="/localdisk/science/samtools-1.11/bin/samtools"
+IBWA="/localdisk/science/bwa-0.7.17/bwa"
+REPEAT_MASKER="/data/home/ywang120/RepeatMasker/RepeatMasker"
+conda activate py2
+cd ${IPWD}
+
+python /data/home/ywang120/TEFLoN/teflon_prep_custom.py \
+    -wd ${IPWD} \
+    -e ${REPEAT_MASKER} \
+    -g ${IREF} \
+    -l ${IREP_BASE} \
+    -p ${IPREFIX} \
+    -s 150 \
+    -t 20
+
+bwa index ${IPREFIX}.prep_MP/${IPREFIX}.mappingRef.fa
+```
+
+Run `teflon.snakefile.template`
+
+
+
+
+## Filter
+
+
+NOTE:
+ For cross-family check, should wait HERE for all the families to do done of the above snakemake pipeline.
+
+
+```shell
+SPECIES="dsim"
+FAM="31"
+PED="/data/home/ywang120/myData/bbsrc/idata/ped/${SPECIES}_${FAM}.ped"
+CHR="/data/home/ywang120/myData/bbsrc/idata/call_variants/${SPECIES}/chromosome.config"
+cd /data/home/ywang120/myData/bbsrc/idata/TE/${SPECIES}/fam${FAM}/genotypes
+
+# merge results
+IN1=
+OUT1=${SPECIES}_${FAM}_te_gt.txt
+ls *genotypes.txt | xargs -I {} awk 'BEGIN{OFS="\t"}{split(ARGV[1],a,"."); print $0,a[1]}' {} > ${OUT1}
+
+# filter insertions
+IN2=${OUT1}
+OUT2=${SPECIES}_${FAM}_te_gt_insertion.txt
+/data/home/ywang120/myData/bbsrc/src/te_insertion_filter.R \
+    --infile ${IN2} \
+    --pedfile ${PED} \
+    --chrfile ${CHR} \
+    --outfile ${OUT2}
+
+# filter deletions
+IN3=${OUT1}
+OUT3=${SPECIES}_${FAM}_te_gt_deletion.txt
+/data/home/ywang120/myData/bbsrc/src/te_deletion_filter.R \
+    --infile ${IN3} \
+    --pedfile ${PED} \
+    --chrfile ${CHR} \
+    --outfile ${OUT3}
+
+# parental copy number
+IN4=${OUT1}
+OUT4=${SPECIES}_${FAM}_te_gt_parental_copy.txt
+/data/home/ywang120/myData/bbsrc/src/te_parental_copy_number.R \
+    --infile ${IN4} \
+    --pedfile ${PED} \
+    --chrfile ${CHR} \
+    --AB 0.2 \
+    --outfile ${OUT4}
+
+
+
+```

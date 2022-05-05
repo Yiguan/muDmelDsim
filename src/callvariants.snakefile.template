@@ -1,0 +1,131 @@
+import os
+
+
+READ_PATH = "/data/home/ywang120/myData/bbsrc/idata/input_dat/raw_seq/dsim/fam28/"
+PREFIX = "dsim_28"
+# READ_PATH = "/data/home/ywang120/myData/bbsrc/idata/denovo_mutations/dsim/fam28/denovo_sim_snp/"
+# PREFIX = "simu_xx"
+
+
+REF    = '/data/home/ywang120/myData/bbsrc/idata/input_dat/ref_genome/dsimulans/GCF_016746395.2_Prin_Dsim_3.1_genomic.fna'
+CHROM = ['2L', '2R', '3L', '3R', 'X', '4']
+
+########################################################
+
+def ind_id(sample_id):
+    return sample_id.split('_')[3]
+
+SAMPLE = [x.replace("_R1.fastq.gz","") for x in os.listdir(READ_PATH) if x.endswith('R1.fastq.gz') and x.startswith('sid')]
+#######################
+
+rule final:
+    input:
+        PREFIX + "_allsample.vcf.gz.tbi"
+
+rule bwa_map:
+    input:
+        fa = REF,
+        r1 = lambda w:"{t1}{t2}_R1.fastq.gz".format(t1=READ_PATH, t2=w.sample),
+        r2 = lambda w:"{t1}{t2}_R2.fastq.gz".format(t1=READ_PATH, t2=w.sample)
+    output:    
+        ss = temp("{sample}.bam")
+    params:
+        rg = lambda  w: r"@RG\tID:{tt}\tSM:{tt}".format(tt=ind_id(w.sample))
+    threads: 8
+    shell:
+        "bwa mem -R '{params.rg}' -t {threads} {input.fa} {input.r1} {input.r2} | samtools view -Sb -@ {threads} - > {output.ss}"
+
+rule samtools_sort:
+    input:
+        ii = "{sample}.bam"
+    output:
+        # DO NOT delete the file, picard MarkDuplicates remove duplicate not in pairs which may leave a single read end
+        # which may not perform simulation that convert bam  to fastq
+        oo = "{sample}.sort.bam" 
+    threads: 8
+    shell:
+        "samtools sort -t {threads} {input.ii} > {output.oo}"
+
+rule samtools_index:
+    input:
+        ii = "{sample}.sort.bam" 
+    output:
+        oo = "{sample}.sort.bam.bai"
+    shell:
+        "samtools index {input.ii}"
+
+####
+rule markRemoveDuplicate:
+    input:
+        ii = "{sample}.sort.bam",
+        hh = "{sample}.sort.bam.bai"
+    output:
+        oo = "{sample}.sort.noDup.bam",
+        qq = temp("{sample}.sort.noDup.metrics.txt")
+    params:
+        pp = "REMOVE_DUPLICATES=true ASSUME_SORTED=true VALIDATION_STRINGENCY=LENIENT"
+    shell:
+        "picard MarkDuplicates INPUT={input.ii} OUTPUT={output.oo} METRICS_FILE={output.qq} "
+        "{params.pp}"
+            
+           
+rule indexNodupBam:
+    input:
+        ii = "{sample}.sort.noDup.bam"
+    output:
+        oo = "{sample}.sort.noDup.bam.bai"
+    shell:
+        "samtools index {input.ii}"
+        
+       
+rule makeBamList:
+    input: 
+        ii = expand("{sample}.sort.noDup.bam.bai", sample=SAMPLE)
+    output:
+        oo = "bam.list"
+    shell:
+        "find . -regex '.*sort.noDup.bam$' > {output.oo}"
+
+rule bcfcall:
+    input:
+        ii = "bam.list",
+        fa = REF,
+        jj = "../ploidy.config",
+        kk = "samples.config"
+    output:
+        oo = temp("temp_{chr}.bcf")
+    params:
+        pp = "-a DP,AD,ADF,ADR --max-depth 250 --min-MQ 20 --regions {chr}"
+    shell:
+        "bcftools mpileup -Ou "
+        "--fasta-ref {input.fa} "
+        "{params.pp} "
+        "--bam-list {input.ii} | "
+        "bcftools call -mv -Ob -f GQ "
+        "--ploidy-file  {input.jj} "
+        "--samples-file {input.kk} "
+        "-o {output.oo}"
+        
+rule bcf2vcf:
+    input:
+        ii = "temp_{chr}.bcf"
+    output:
+        oo = "temp_{chr}.vcf.gz"
+    shell:
+        "bcftools view {input.ii} | bgzip > {output.oo}"
+
+rule gatherChrVCF:
+    input:
+        ii = expand("temp_{chr}.vcf.gz", chr=CHROM)
+    output:
+        oo = PREFIX + "_allsample.vcf.gz"
+    shell:
+        "bcftools concat -Ou {input.ii} | bcftools sort -Oz -o {output.oo}"
+
+rule indexVcf:
+    input:
+        ii = PREFIX + "_allsample.vcf.gz"
+    output:
+        oo = PREFIX + "_allsample.vcf.gz.tbi"
+    shell:
+        "tabix -p vcf {input.ii}"
